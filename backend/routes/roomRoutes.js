@@ -1,0 +1,16 @@
+const express = require("express");
+const router = express.Router();
+
+const { createRoom } = require("../controllers/roomController");
+const authMiddleware = require("../middleware/authMiddleware");
+const { addMember } = require("../controllers/roomController");
+const { getRoom,leaveRoom  } = require("../controllers/roomController");
+
+router.get("/:roomId", authMiddleware, getRoom);
+
+router.post("/add-member", authMiddleware, addMember);
+
+router.post("/create", authMiddleware, createRoom);
+router.post("/leave", authMiddleware, leaveRoom);
+
+module.exports = router;
