@@ -43,5 +43,5 @@ const settlementRoutes = require("./routes/settlementRoutes");
 app.use("/api/settlements", settlementRoutes);
 
 const dashboardRoutes = require("./routes/dashboardRoutes");
-
+app.use("/api/admin", require("./routes/adminRoutes"));
 app.use("/api/dashboard", dashboardRoutes);

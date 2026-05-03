@@ -1,6 +1,7 @@
 const Room = require("../models/Room");
 const User = require("../models/User");
 const mongoose = require("mongoose"); // ✅ MOVE HERE
+const JoinRequest = require("../models/JoinRequest");
 
 // CREATE ROOM
 exports.createRoom = async (req, res) => {
@@ -24,7 +25,40 @@ exports.createRoom = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
+//join reuest 
+exports.joinRequest = async (req, res) => {
+  try {
+    const { roomId } = req.body;
 
+    const existing = await JoinRequest.findOne({
+      roomId,
+      userId: req.user.id,
+      status: "pending"
+    });
+
+    if (existing) {
+      return res.status(400).json({
+        message: "Request already pending"
+      });
+    }
+
+    const request = new JoinRequest({
+      roomId,
+      userId: req.user.id
+    });
+
+    await request.save();
+
+    res.json({
+      message: "Join request sent"
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      error: error.message
+    });
+  }
+};
 // ADD MEMBER
 exports.addMember = async (req, res) => {
     try {

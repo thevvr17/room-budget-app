@@ -17,7 +17,8 @@ if (!mongoose.Types.ObjectId.isValid(roomId)) {
     const budget = await Budget.findOne({ roomId, month });
 
     const topUps = await TopUp.find({ roomId, month });
-    const expenses = await Expense.find({ roomId, month });
+    const expenses = await Expense.find({ roomId, month })
+  .sort({ createdAt: -1 });
     const settlements = await Settlement.find({ roomId });
 
     const totalTopUp = topUps.reduce((sum, t) => sum + t.totalAmount, 0);
@@ -40,7 +41,8 @@ expenses.forEach(e => {
       totalExpense,
       finalBalance,
       settlements,
-        categoryStats
+      categoryStats,
+      expenses: expenses.slice(0, 5)
     });
 
 
