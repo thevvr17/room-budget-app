@@ -7,7 +7,8 @@ export default function Expenses() {
   const navigate = useNavigate();
 
   const token = localStorage.getItem("token");
-  const roomId = "69dbe53a583d97f6bb22ac2b";
+const user = JSON.parse(localStorage.getItem("user"));
+const roomId = user?.roomId;
 
   const [expenses, setExpenses] = useState([]);
   const [search, setSearch] = useState("");

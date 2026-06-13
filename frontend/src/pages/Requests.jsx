@@ -6,7 +6,8 @@ export default function Requests() {
   const token = localStorage.getItem("token");
   const user = JSON.parse(localStorage.getItem("user"));
 
-  const roomId = "69dbe53a583d97f6bb22ac2b";
+
+const roomId = user?.roomId;
 
   const [requests, setRequests] = useState([]);
 

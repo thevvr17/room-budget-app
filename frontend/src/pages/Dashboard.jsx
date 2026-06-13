@@ -5,7 +5,13 @@ import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
 export default function Dashboard() {
-  const user = JSON.parse(localStorage.getItem("user"));
+  let user = null;
+
+  try {
+    user = JSON.parse(localStorage.getItem("user"));
+  } catch {
+    localStorage.removeItem("user");
+  }
   const token = localStorage.getItem("token");
 
   const [data, setData] = useState(null);
@@ -13,6 +19,7 @@ export default function Dashboard() {
 
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [showTopUpModal, setShowTopUpModal] = useState(false);
+  const [pendingAmount, setPendingAmount] = useState(0);
 
   const [topUpAmount, setTopUpAmount] = useState("");
   const [expenseForm, setExpenseForm] = useState({
@@ -21,7 +28,7 @@ export default function Dashboard() {
     category: "food",
   });
   const navigate = useNavigate();
-  const roomId = "69dbe53a583d97f6bb22ac2b";
+  const roomId = user?.roomId;
 
   const copyRoomId = async () => {
     try {
@@ -50,10 +57,45 @@ export default function Dashboard() {
       setLoading(false);
     }
   };
+  const fetchPending = async () => {
+  try {
+    const res = await api.get(
+      `/notifications/${roomId}`,
+      {
+        headers: {
+          Authorization: token
+        }
+      }
+    );
 
-  useEffect(() => {
-    fetchDashboard();
-  }, []);
+    const mine = (res.data.notifications || [])
+      .filter(
+        (item) =>
+          item.createdBy?._id === user._id &&
+          item.status === "active"
+      )
+      .reduce((sum, item) => {
+        const match =
+          item.message.match(/₹(\d+)/);
+
+        return sum + Number(match?.[1] || 0);
+      }, 0);
+
+    setPendingAmount(mine);
+
+  } catch (error) {
+    console.log(error);
+    setPendingAmount(0);
+  }
+};
+
+useEffect(() => {
+  fetchDashboard();
+
+  if (user?.role !== "admin") {
+    fetchPending();
+  }
+}, []);
 
   const addExpense = async () => {
     if (!expenseForm.title.trim()) {
@@ -229,19 +271,51 @@ export default function Dashboard() {
 
       {/* Action Buttons */}
       <div className="grid grid-cols-2 gap-4 mt-5">
+        {/* Add Expense */}
         <button
           onClick={() => setShowExpenseModal(true)}
-          className="bg-emerald-500 rounded-2xl py-3 font-semibold hover:opacity-90 transition"
+          className="bg-emerald-500 rounded-2xl py-4 px-4 font-semibold hover:opacity-90 transition"
         >
           + Add Expense
         </button>
 
-        <button
-          onClick={() => setShowTopUpModal(true)}
-          className="bg-purple-500 rounded-2xl py-3 font-semibold hover:opacity-90 transition"
-        >
-          + Top Up
-        </button>
+        {/* Admin Top Up */}
+        {user?.role === "admin" ? (
+          <button
+            onClick={() => setShowTopUpModal(true)}
+            className="bg-purple-500 rounded-2xl py-4 px-4 font-semibold hover:opacity-90 transition"
+          >
+            + Top Up
+          </button>
+        ) : (
+          /* Member Pending Card */
+          <button
+  onClick={() => navigate("/settlements")}
+  className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl px-4 py-4 text-left shadow-lg hover:opacity-95 transition"
+>
+  <div className="flex items-start justify-between">
+    <div>
+      <p className="text-xs text-white/80">
+        Awaiting Admin Approval
+      </p>
+
+      <h3 className="text-2xl font-bold mt-1 text-white">
+        ₹{pendingAmount}
+      </h3>
+
+      <p className="text-xs text-white/70 mt-1">
+        {pendingAmount > 0
+          ? "Tap to view settlements"
+          : "No pending dues"}
+      </p>
+    </div>
+
+    <div className="text-2xl">
+      💵
+    </div>
+  </div>
+</button>
+        )}
       </div>
 
       {/* Stats */}

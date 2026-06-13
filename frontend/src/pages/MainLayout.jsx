@@ -4,19 +4,29 @@ import { useNavigate } from "react-router-dom";
 import Dashboard from "./Dashboard";
 import Members from "./Members";
 import Requests from "./Requests";
-
+import Alerts from "./Alerts";
 import api from "../services/api";
+import { io } from "socket.io-client";
+const socket = io("http://localhost:5000");
 
 export default function MainLayout() {
   const navigate = useNavigate();
 
-  const user = JSON.parse(localStorage.getItem("user"));
+  let user = null;
+
+try {
+  user = JSON.parse(localStorage.getItem("user"));
+} catch {
+  localStorage.removeItem("user");
+}
   const token = localStorage.getItem("token");
 
-  const roomId = "69dbe53a583d97f6bb22ac2b";
+
+const roomId = user?.roomId;
 
   const [tab, setTab] = useState("home");
   const [requestCount, setRequestCount] = useState(0);
+  const [alertCount, setAlertCount] = useState(0);
 
   const fetchRequestCount = async () => {
     try {
@@ -40,9 +50,48 @@ export default function MainLayout() {
     }
   };
 
-  useEffect(() => {
-    fetchRequestCount();
-  }, []);
+  const fetchAlertCount = async () => {
+  try {
+    const res = await api.get(
+      `/notifications/${roomId}`,
+      {
+        headers: {
+          Authorization: token
+        }
+      }
+    );
+
+    const active =
+      res.data.notifications.filter(
+        (x) => x.status === "active"
+      ).length;
+
+    setAlertCount(active);
+
+  } catch (error) {
+    console.log(error);
+  }
+};
+
+useEffect(() => {
+  fetchRequestCount();
+  fetchAlertCount();
+
+  socket.emit("join-room", roomId);
+
+  socket.on("new-alert", () => {
+    fetchAlertCount();
+  });
+
+  socket.on("alert-resolved", () => {
+    fetchAlertCount();
+  });
+
+  return () => {
+    socket.off("new-alert");
+    socket.off("alert-resolved");
+  };
+}, []);
 
   const logout = () => {
     localStorage.clear();
@@ -56,6 +105,7 @@ export default function MainLayout() {
       {tab === "home" && <Dashboard />}
 
       {tab === "members" && <Members />}
+      {tab === "alerts" && <Alerts />}
 
       {tab === "requests" &&
         user?.role === "admin" && (
@@ -101,8 +151,8 @@ export default function MainLayout() {
         <div
           className={`grid gap-2 max-w-md mx-auto ${
             user?.role === "admin"
-              ? "grid-cols-4"
-              : "grid-cols-3"
+              ? "grid-cols-5"
+              : "grid-cols-4"
           }`}
         >
 
@@ -149,6 +199,26 @@ export default function MainLayout() {
               )}
             </button>
           )}
+
+          <button
+  onClick={() => {
+    setTab("alerts");
+    fetchAlertCount();
+  }}
+  className={`relative py-2 rounded-xl text-sm ${
+    tab === "alerts"
+      ? "bg-indigo-500 text-white"
+      : "text-slate-400"
+  }`}
+>
+  🔔 Alerts
+
+  {alertCount > 0 && (
+    <span className="absolute -top-1 right-2 bg-red-500 text-white text-[10px] px-1.5 rounded-full">
+      {alertCount}
+    </span>
+  )}
+</button>
 
           <button
             onClick={() => setTab("more")}

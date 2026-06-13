@@ -14,7 +14,7 @@ export default function Members() {
   const token = localStorage.getItem("token");
   const user = JSON.parse(localStorage.getItem("user"));
 
-  const roomId = "69dbe53a583d97f6bb22ac2b";
+const roomId = user?.roomId;
 
   const [room, setRoom] = useState(null);
   const [email, setEmail] = useState("");

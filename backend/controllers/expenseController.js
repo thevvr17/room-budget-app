@@ -34,8 +34,7 @@ exports.updateExpense = async (req, res) => {
     }
 
     expense.title = title || expense.title;
-    expense.amount =
-      amount || expense.amount;
+    expense.amount = amount || expense.amount;
     expense.category =
       category || expense.category;
 
@@ -123,17 +122,25 @@ exports.searchExpenses = async (req, res) => {
     });
   }
 };
+
+// ==============================
 // ADD EXPENSE
+// ==============================
 exports.addExpense = async (req, res) => {
   try {
     const { roomId, title, amount, category } = req.body;
 
-    const finalCategory = category || detectCategory(title);
+    const finalCategory =
+      category || detectCategory(title);
 
-    const month = new Date().toISOString().slice(0, 7);
+    const month = new Date()
+      .toISOString()
+      .slice(0, 7);
 
     const Room = require("../models/Room");
     const Settlement = require("../models/Settlement");
+    const User = require("../models/User");
+    const Notification = require("../models/Notification");
 
     const expense = new Expense({
       roomId,
@@ -146,10 +153,22 @@ exports.addExpense = async (req, res) => {
 
     await expense.save();
 
-    // check if paid by admin
     const room = await Room.findById(roomId);
 
-    if (room.admin.toString() !== req.user.id) {
+    const isAdmin =
+      room.admin.toString() === req.user.id;
+
+    if (!isAdmin) {
+      const currentUser =
+        await User.findById(req.user.id);
+
+      await Notification.create({
+        roomId,
+        type: "expense",
+        message: `${currentUser.name} added ₹${amount}. Admin owes this amount.`,
+        createdBy: req.user.id
+      });
+
       const settlement = new Settlement({
         roomId,
         fromUser: room.admin,
@@ -158,6 +177,13 @@ exports.addExpense = async (req, res) => {
       });
 
       await settlement.save();
+
+      // REALTIME ALERT
+      const io = req.app.get("io");
+
+      io.to(roomId.toString()).emit(
+        "new-alert"
+      );
     }
 
     res.json({
