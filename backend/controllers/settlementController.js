@@ -1,13 +1,49 @@
 const Settlement = require("../models/Settlement");
+const Notification = require("../models/Notification");
+
+const emitSettlementChanged = (req, settlement) => {
+  const io = req.app.get("io");
+  io.to(settlement.roomId.toString()).emit("settlements-updated");
+  io.to(settlement.roomId.toString()).emit("alert-resolved");
+};
+
+const resolveLinkedExpenseAlert = async (settlement, userId) => {
+  const expenseId = settlement.expenseId || settlement.relatedExpenseId;
+  if (!expenseId) return;
+
+  await Notification.findOneAndUpdate(
+    {
+      type: "expense",
+      $or: [
+        { expenseId },
+        { relatedId: expenseId }
+      ],
+      status: "active"
+    },
+    {
+      status: "resolved",
+      resolvedBy: userId,
+      resolvedAt: new Date()
+    }
+  );
+};
 
 // GET SETTLEMENTS
 exports.getSettlements = async (req, res) => {
   try {
     const { roomId } = req.params;
 
+    await Settlement.deleteMany({
+      roomId,
+      status: "pending",
+      relatedExpenseId: null
+    });
+
     const settlements = await Settlement.find({ roomId })
       .populate("fromUser", "name")
-      .populate("toUser", "name");
+      .populate("toUser", "name")
+      .populate("expenseId", "title category amount createdAt")
+      .populate("relatedExpenseId", "title category amount createdAt");
 
     res.json({ settlements });
 
@@ -31,6 +67,8 @@ exports.markAsPaid = async (req, res) => {
     if (settlement.fromUser.toString() === req.user.id) {
       settlement.status = "paid";
       await settlement.save();
+      await resolveLinkedExpenseAlert(settlement, req.user.id);
+      emitSettlementChanged(req, settlement);
 
       return res.json({
         message: "Settlement marked as paid by admin",
@@ -45,6 +83,8 @@ exports.markAsPaid = async (req, res) => {
     ) {
       settlement.status = "paid";
       await settlement.save();
+      await resolveLinkedExpenseAlert(settlement, req.user.id);
+      emitSettlementChanged(req, settlement);
 
       return res.json({
         message: "Settlement marked as paid by member",
@@ -79,6 +119,7 @@ exports.allowMemberSettle = async (req, res) => {
 
     settlement.canMemberSettle = true;
     await settlement.save();
+    emitSettlementChanged(req, settlement);
 
     res.json({
       message: "Member can now mark settlement",
@@ -108,6 +149,8 @@ exports.waiveSettlement = async (req, res) => {
     ) {
       settlement.status = "waived";
       await settlement.save();
+      await resolveLinkedExpenseAlert(settlement, req.user.id);
+      emitSettlementChanged(req, settlement);
 
       return res.json({
         message: "Settlement waived",

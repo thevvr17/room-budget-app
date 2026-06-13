@@ -1,5 +1,6 @@
 const Budget = require("../models/Budget");
 const Room = require("../models/Room");
+const { ensureMonthlyBudget } = require("../services/budgetService");
 
 // CREATE MONTHLY BUDGET
 exports.createBudget = async (req, res) => {
@@ -17,30 +18,21 @@ exports.createBudget = async (req, res) => {
       return res.status(403).json({ message: "Only admin can set budget" });
     }
 
-    const totalMembers = room.members.length;
-
-    const baseBudget = totalMembers * contribution;
-
-    const month = new Date().toISOString().slice(0, 7); // "YYYY-MM"
-
-    const existing = await Budget.findOne({ roomId, month });
-    if (existing) {
-      return res.status(400).json({ message: "Budget already created for this month" });
+    const contributionAmount = Number(contribution);
+    if (!contributionAmount || contributionAmount <= 0) {
+      return res.status(400).json({
+        message: "Contribution must be greater than 0"
+      });
     }
 
-    const budget = new Budget({
-      roomId,
-      month,
-      totalMembers,
-      contributionPerPerson: contribution,
-      baseBudget
-    });
-
-    await budget.save();
+    room.monthlyContributionPerPerson = contributionAmount;
+    await room.save();
+    const { budget, charges } = await ensureMonthlyBudget(room);
 
     res.json({
-      message: "Budget created successfully",
-      budget
+      message: "Monthly contribution updated",
+      budget,
+      charges
     });
 
   } catch (error) {
@@ -102,7 +94,10 @@ exports.getBalance = async (req, res) => {
     const month = new Date().toISOString().slice(0, 7);
 
     // get budget
-    const budget = await Budget.findOne({ roomId, month });
+    const room = await Room.findById(roomId);
+    const { budget } = room
+      ? await ensureMonthlyBudget(room, month)
+      : { budget: null };
 
     if (!budget) {
       return res.status(404).json({ message: "Budget not found" });
@@ -123,6 +118,8 @@ exports.getBalance = async (req, res) => {
       totalTopUp +
       budget.carryForward -
       totalExpense;
+    budget.finalBalance = finalBalance;
+    await budget.save();
 
     res.json({
       baseBudget: budget.baseBudget,

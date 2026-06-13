@@ -12,7 +12,13 @@ const budgetSchema = new mongoose.Schema({
   carryForward: {
     type: Number,
     default: 0
+  },
+  finalBalance: {
+    type: Number,
+    default: 0
   }
 }, { timestamps: true });
+
+budgetSchema.index({ roomId: 1, month: 1 }, { unique: true });
 
 module.exports = mongoose.model("Budget", budgetSchema);

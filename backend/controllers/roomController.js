@@ -2,6 +2,9 @@ const Room = require("../models/Room");
 const User = require("../models/User");
 const mongoose = require("mongoose"); // ✅ MOVE HERE
 const JoinRequest = require("../models/JoinRequest");
+const Membership = require("../models/Membership");
+const LeaveRequest = require("../models/LeaveRequest");
+const Notification = require("../models/Notification");
 
 // CREATE ROOM
 exports.createRoom = async (req, res) => {
@@ -15,6 +18,13 @@ exports.createRoom = async (req, res) => {
         });
 
         await room.save();
+        await Membership.create({
+            roomId: room._id,
+            userId: req.user.id,
+            joinedAt: room.createdAt,
+            status: "active"
+        });
+        await User.findByIdAndUpdate(req.user.id, { role: "admin" });
 
         res.status(201).json({
             message: "Room created successfully",
@@ -48,6 +58,9 @@ exports.joinRequest = async (req, res) => {
     });
 
     await request.save();
+
+    const io = req.app.get("io");
+    io.to(roomId.toString()).emit("join-request-created");
 
     res.json({
       message: "Join request sent"
@@ -94,6 +107,12 @@ exports.addMember = async (req, res) => {
 
         room.members.push(user._id);
         await room.save();
+        await Membership.create({
+            roomId: room._id,
+            userId: user._id,
+            joinedAt: new Date(),
+            status: "active"
+        });
 
         res.json({
             message: "Member added successfully",
@@ -118,57 +137,143 @@ exports.getRoom = async (req, res) => {
       return res.status(404).json({ message: "Room not found" });
     }
 
-    res.json({
-      room
+    const memberships = await Membership.find({
+      roomId,
+      status: { $ne: "left" }
     });
+    const membershipByUser = new Map(
+      memberships.map((membership) => [
+        membership.userId.toString(),
+        membership
+      ])
+    );
+
+    const roomData = room.toObject();
+    roomData.members = roomData.members.map((member) => ({
+      ...member,
+      membership: membershipByUser.get(member._id.toString()) || null
+    }));
+
+    res.json({ room: roomData });
 
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
-const Settlement = require("../models/Settlement");
-
 // LEAVE ROOM
 exports.leaveRoom = async (req, res) => {
   try {
-    const { roomId } = req.body;
+    const { roomId, requestedLeavingAt } = req.body;
+    const room = await Room.findById(roomId);
 
-    const userId = req.user.id;
+    if (!room || !room.members.some((id) => id.toString() === req.user.id)) {
+      return res.status(403).json({ message: "Room access denied" });
+    }
 
-    // check pending settlements
-    const pending = await Settlement.find({
-      roomId,
-      status: "pending",
-      $or: [
-        { fromUser: userId },
-        { toUser: userId }
-      ]
-    });
-
-    if (pending.length > 0) {
+    if (room.admin.toString() === req.user.id) {
       return res.status(400).json({
-        message: "You have pending settlements. Clear them before leaving."
+        message: "The room admin cannot submit a leave request"
       });
     }
 
-    const room = await Room.findById(roomId);
-
-    if (!room) {
-      return res.status(404).json({ message: "Room not found" });
+    const requestedDate = new Date(`${requestedLeavingAt}T00:00:00.000Z`);
+    if (!requestedLeavingAt || Number.isNaN(requestedDate.getTime())) {
+      return res.status(400).json({ message: "Choose your requested final day" });
     }
 
-    // remove user from members
-    room.members = room.members.filter(
-      m => m.toString() !== userId
-    );
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    if (requestedDate < today) {
+      return res.status(400).json({
+        message: "Requested final day cannot be in the past"
+      });
+    }
 
-    await room.save();
-
-    res.json({
-      message: "Left room successfully"
+    const existing = await LeaveRequest.findOne({
+      roomId,
+      userId: req.user.id,
+      status: { $in: ["pending", "scheduled"] }
     });
 
+    if (existing) {
+      return res.status(400).json({
+        message: "Your leave request is already under review"
+      });
+    }
+
+    const latestCancelled = await LeaveRequest.findOne({
+      roomId,
+      userId: req.user.id,
+      status: "cancelled"
+    }).sort({ updatedAt: -1 });
+
+    if (latestCancelled) {
+      const cooldownUntil = new Date(
+        latestCancelled.updatedAt.getTime() + 2 * 24 * 60 * 60 * 1000
+      );
+
+      if (cooldownUntil > new Date()) {
+        return res.status(400).json({
+          message: "Leave requests are temporarily disabled after cancellation",
+          cooldownUntil
+        });
+      }
+    }
+
+    const leaveRequest = await LeaveRequest.create({
+      roomId,
+      userId: req.user.id,
+      requestedLeavingAt: requestedDate
+    });
+
+    await Notification.create({
+      roomId,
+      type: "leave_request",
+      message: `Leave requested for ${requestedDate.toLocaleDateString("en-IN")}. Review dues and schedule the final day.`,
+      createdBy: req.user.id,
+      relatedId: leaveRequest._id
+    });
+
+    const io = req.app.get("io");
+    io.to(roomId.toString()).emit("leave-request-updated");
+    io.to(roomId.toString()).emit("new-alert");
+
+    res.status(201).json({
+      message: "Leave request sent to admin",
+      leaveRequest
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.getLeaveRequestStatus = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const leaveRequest = await LeaveRequest.findOne({
+      roomId,
+      userId: req.user.id,
+      status: { $in: ["pending", "scheduled"] }
+    }).sort({ createdAt: -1 });
+
+    const cancelled = await LeaveRequest.findOne({
+      roomId,
+      userId: req.user.id,
+      status: "cancelled"
+    }).sort({ updatedAt: -1 });
+
+    let cooldownUntil = null;
+    if (cancelled) {
+      const until = new Date(
+        cancelled.updatedAt.getTime() + 2 * 24 * 60 * 60 * 1000
+      );
+      if (until > new Date()) {
+        cooldownUntil = until;
+      }
+    }
+
+    res.json({ leaveRequest, cooldownUntil });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

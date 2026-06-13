@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import api from "../services/api";
 import toast from "react-hot-toast";
-import { io } from "socket.io-client";
-const socket = io("http://localhost:5000");
+import socket from "../services/socket";
 
-export default function Alerts() {
+export default function Alerts({ refreshBadge }) {
   const token = localStorage.getItem("token");
 const user = JSON.parse(localStorage.getItem("user"));
 const roomId = user?.roomId;
@@ -28,19 +27,22 @@ const roomId = user?.roomId;
 useEffect(() => {
   fetchAlerts();
 
-  socket.emit("join-room", roomId);
+  socket.emit("join-room", { roomId, token });
 
-  socket.on("new-alert", () => {
+  const handleNewAlert = () => {
     fetchAlerts();
-  });
+  };
 
-  socket.on("alert-resolved", () => {
+  const handleAlertResolved = () => {
     fetchAlerts();
-  });
+  };
+
+  socket.on("new-alert", handleNewAlert);
+  socket.on("alert-resolved", handleAlertResolved);
 
   return () => {
-    socket.off("new-alert");
-    socket.off("alert-resolved");
+    socket.off("new-alert", handleNewAlert);
+    socket.off("alert-resolved", handleAlertResolved);
   };
 }, []);
 
@@ -56,10 +58,7 @@ useEffect(() => {
 
 toast.success("Resolved");
 fetchAlerts();
-
-window.dispatchEvent(
-  new Event("alertsUpdated")
-);
+refreshBadge?.();
     } catch (error) {
       toast.error(error?.response?.data?.message || "Failed");
     }

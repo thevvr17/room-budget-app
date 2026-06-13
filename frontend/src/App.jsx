@@ -6,6 +6,7 @@ import MainLayout from "./pages/MainLayout";
 import JoinRoom from "./pages/JoinRoom";
 import PendingApproval from "./pages/PendingApproval";
 import Expenses from "./pages/Expenses";
+import Settlements from "./pages/Settlements";
 import { Toaster } from "react-hot-toast";
 import ProtectedRoute from "./pages/ProtectedRoute";
 
@@ -49,6 +50,15 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Expenses />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/settlements"
+          element={
+            <ProtectedRoute>
+              <Settlements />
             </ProtectedRoute>
           }
         />

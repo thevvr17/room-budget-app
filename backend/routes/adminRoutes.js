@@ -6,7 +6,10 @@ const { resetMonth } = require("../controllers/adminController");
 const {
   getRequests,
   approveRequest,
-  rejectRequest
+  rejectRequest,
+  scheduleMemberLeave,
+  removeMember,
+  cancelLeaveRequest
 } = require("../controllers/adminController");
 
 router.post("/reset-month", authMiddleware, resetMonth);
@@ -28,5 +31,9 @@ router.post(
   authMiddleware,
   rejectRequest
 );
+
+router.post("/schedule-leave", authMiddleware, scheduleMemberLeave);
+router.post("/cancel-leave", authMiddleware, cancelLeaveRequest);
+router.post("/remove-member", authMiddleware, removeMember);
 
 module.exports = router;

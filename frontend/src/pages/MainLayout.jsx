@@ -6,8 +6,7 @@ import Members from "./Members";
 import Requests from "./Requests";
 import Alerts from "./Alerts";
 import api from "../services/api";
-import { io } from "socket.io-client";
-const socket = io("http://localhost:5000");
+import socket from "../services/socket";
 
 export default function MainLayout() {
   const navigate = useNavigate();
@@ -42,7 +41,8 @@ const roomId = user?.roomId;
       );
 
       setRequestCount(
-        res.data.requests?.length || 0
+        (res.data.requests?.length || 0) +
+        (res.data.leaveRequests?.length || 0)
       );
 
     } catch (error) {
@@ -77,19 +77,38 @@ useEffect(() => {
   fetchRequestCount();
   fetchAlertCount();
 
-  socket.emit("join-room", roomId);
+  const joinSocketRoom = () => {
+    socket.emit("join-room", { roomId, token });
+  };
 
-  socket.on("new-alert", () => {
-    fetchAlertCount();
-  });
+  joinSocketRoom();
 
-  socket.on("alert-resolved", () => {
+  const handleNewAlert = () => {
     fetchAlertCount();
-  });
+  };
+
+  const handleAlertResolved = () => {
+    fetchAlertCount();
+  };
+
+  const handleJoinRequestChange = () => {
+    fetchRequestCount();
+  };
+
+  socket.on("connect", joinSocketRoom);
+  socket.on("new-alert", handleNewAlert);
+  socket.on("alert-resolved", handleAlertResolved);
+  socket.on("join-request-created", handleJoinRequestChange);
+  socket.on("join-request-updated", handleJoinRequestChange);
+  socket.on("leave-request-updated", handleJoinRequestChange);
 
   return () => {
-    socket.off("new-alert");
-    socket.off("alert-resolved");
+    socket.off("connect", joinSocketRoom);
+    socket.off("new-alert", handleNewAlert);
+    socket.off("alert-resolved", handleAlertResolved);
+    socket.off("join-request-created", handleJoinRequestChange);
+    socket.off("join-request-updated", handleJoinRequestChange);
+    socket.off("leave-request-updated", handleJoinRequestChange);
   };
 }, []);
 
@@ -105,7 +124,7 @@ useEffect(() => {
       {tab === "home" && <Dashboard />}
 
       {tab === "members" && <Members />}
-      {tab === "alerts" && <Alerts />}
+      {tab === "alerts" && <Alerts refreshBadge={fetchAlertCount} />}
 
       {tab === "requests" &&
         user?.role === "admin" && (

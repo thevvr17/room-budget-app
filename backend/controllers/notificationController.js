@@ -1,4 +1,5 @@
 const Notification = require("../models/Notification");
+const Settlement = require("../models/Settlement");
 
 exports.getNotifications = async (req, res) => {
   try {
@@ -53,11 +54,29 @@ exports.resolveNotification = async (req, res) => {
 
     await notification.save();
 
+    const expenseId = notification.expenseId || notification.relatedId;
+
+    if (notification.type === "expense" && expenseId) {
+      await Settlement.findOneAndUpdate(
+        {
+          roomId: notification.roomId,
+          $or: [
+            { expenseId },
+            { relatedExpenseId: expenseId }
+          ],
+          status: "pending"
+        },
+        { status: "paid" }
+      );
+    }
+
     // REALTIME UPDATE
     const io = req.app.get("io");
 
     io.to(notification.roomId.toString())
       .emit("alert-resolved");
+    io.to(notification.roomId.toString())
+      .emit("settlements-updated");
 
     res.json({
       message: "Resolved"

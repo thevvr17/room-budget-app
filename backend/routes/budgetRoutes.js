@@ -7,9 +7,10 @@ const { getBalance } = require("../controllers/budgetController");
 
 
 const authMiddleware = require("../middleware/authMiddleware");
+const { requireRoomMember, requireRoomAdmin } = require("../middleware/roomAuthMiddleware");
 
-router.post("/create", authMiddleware, createBudget);
-router.post("/topup", authMiddleware, addTopUp);
-router.get("/balance/:roomId", authMiddleware, getBalance);
+router.post("/create", authMiddleware, requireRoomAdmin, createBudget);
+router.post("/topup", authMiddleware, requireRoomAdmin, addTopUp);
+router.get("/balance/:roomId", authMiddleware, requireRoomMember, getBalance);
 
 module.exports = router;

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import toast from "react-hot-toast";
+import socket from "../services/socket";
 
 export default function Expenses() {
   const navigate = useNavigate();
@@ -24,7 +25,7 @@ const roomId = user?.roomId;
   const fetchExpenses = async () => {
     try {
       const res = await api.get(
-        `/dashboard/${roomId}`,
+        `/expenses/room/${roomId}`,
         {
           headers: {
             Authorization: token
@@ -42,6 +43,16 @@ const roomId = user?.roomId;
 
   useEffect(() => {
     fetchExpenses();
+
+    const handleExpensesUpdated = () => {
+      fetchExpenses();
+    };
+
+    socket.on("expenses-updated", handleExpensesUpdated);
+
+    return () => {
+      socket.off("expenses-updated", handleExpensesUpdated);
+    };
   }, []);
 
   const searchExpenses = async () => {
@@ -185,25 +196,23 @@ const roomId = user?.roomId;
 
             </div>
 
-            <div className="grid grid-cols-2 gap-3 mt-4">
+            {(!item.settlement || item.settlement.status === "pending") && (
+              <div className="grid grid-cols-2 gap-3 mt-4">
+                <button
+                  onClick={() => openEdit(item)}
+                  className="py-2 rounded-xl bg-amber-500 font-semibold"
+                >
+                  Edit
+                </button>
 
-              <button
-                onClick={() => openEdit(item)}
-                className="py-2 rounded-xl bg-amber-500 font-semibold"
-              >
-                Edit
-              </button>
-
-              <button
-                onClick={() =>
-                  deleteExpense(item._id)
-                }
-                className="py-2 rounded-xl bg-red-500 font-semibold"
-              >
-                Delete
-              </button>
-
-            </div>
+                <button
+                  onClick={() => deleteExpense(item._id)}
+                  className="py-2 rounded-xl bg-red-500 font-semibold"
+                >
+                  Delete
+                </button>
+              </div>
+            )}
 
           </div>
         ))}

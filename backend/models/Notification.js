@@ -28,6 +28,12 @@ const notificationSchema = new mongoose.Schema(
       ref: "User"
     },
 
+    toUser: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null
+    },
+
     resolvedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -36,6 +42,17 @@ const notificationSchema = new mongoose.Schema(
 
     resolvedAt: {
       type: Date,
+      default: null
+    },
+
+    relatedId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null
+    },
+
+    expenseId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Expense",
       default: null
     }
   },

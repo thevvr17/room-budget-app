@@ -14,20 +14,28 @@ const settlementSchema = new mongoose.Schema({
     ref: "User"
   },
   amount: Number,
+  canMemberSettle: {
+    type: Boolean,
+    default: false
+  },
+  relatedExpenseId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Expense",
+    default: null
+  },
+  expenseId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Expense",
+    default: null
+  },
   status: {
     type: String,
-    enum: ["pending", "paid"],
+    enum: ["pending", "paid", "waived"],
     default: "pending"
-  },
-  canMemberSettle: {
-  type: Boolean,
-  default: false
-},
-status: {
-  type: String,
-  enum: ["pending", "paid", "waived"],
-  default: "pending"
-}
+  }
 }, { timestamps: true });
+
+settlementSchema.index({ relatedExpenseId: 1 });
+settlementSchema.index({ expenseId: 1 });
 
 module.exports = mongoose.model("Settlement", settlementSchema);

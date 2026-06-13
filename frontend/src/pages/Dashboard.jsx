@@ -3,6 +3,7 @@ import api from "../services/api";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
+import socket from "../services/socket";
 
 export default function Dashboard() {
   let user = null;
@@ -19,9 +20,11 @@ export default function Dashboard() {
 
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [showTopUpModal, setShowTopUpModal] = useState(false);
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [pendingAmount, setPendingAmount] = useState(0);
 
   const [topUpAmount, setTopUpAmount] = useState("");
+  const [contribution, setContribution] = useState("");
   const [expenseForm, setExpenseForm] = useState({
     title: "",
     amount: "",
@@ -51,52 +54,33 @@ export default function Dashboard() {
       });
 
       setData(res.data);
+      setPendingAmount(
+        user?.role === "admin"
+          ? 0
+          : res.data.pendingDuesByUser?.[user?._id] || 0,
+      );
     } catch (error) {
       console.log(error);
     } finally {
       setLoading(false);
     }
   };
-  const fetchPending = async () => {
-  try {
-    const res = await api.get(
-      `/notifications/${roomId}`,
-      {
-        headers: {
-          Authorization: token
-        }
-      }
-    );
-
-    const mine = (res.data.notifications || [])
-      .filter(
-        (item) =>
-          item.createdBy?._id === user._id &&
-          item.status === "active"
-      )
-      .reduce((sum, item) => {
-        const match =
-          item.message.match(/₹(\d+)/);
-
-        return sum + Number(match?.[1] || 0);
-      }, 0);
-
-    setPendingAmount(mine);
-
-  } catch (error) {
-    console.log(error);
-    setPendingAmount(0);
-  }
-};
 
 useEffect(() => {
   fetchDashboard();
 
-  if (user?.role !== "admin") {
-    fetchPending();
-  }
-}, []);
+  const refreshDashboard = () => {
+    fetchDashboard();
+  };
 
+  socket.on("expenses-updated", refreshDashboard);
+  socket.on("settlements-updated", refreshDashboard);
+
+  return () => {
+    socket.off("expenses-updated", refreshDashboard);
+    socket.off("settlements-updated", refreshDashboard);
+  };
+}, []);
   const addExpense = async () => {
     if (!expenseForm.title.trim()) {
       return toast.error("Expense title required");
@@ -176,6 +160,29 @@ useEffect(() => {
     } catch (error) {
       console.log(error);
       toast.error("Failed to add top up");
+    }
+  };
+
+  const setMonthlyContribution = async () => {
+    if (!contribution || Number(contribution) <= 0) {
+      return toast.error("Contribution must be greater than 0");
+    }
+
+    try {
+      await api.post(
+        "/budget/create",
+        { roomId, contribution: Number(contribution) },
+        { headers: { Authorization: token } },
+      );
+
+      toast.success("Monthly contribution updated");
+      setShowBudgetModal(false);
+      setContribution("");
+      fetchDashboard();
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message || "Failed to update contribution",
+      );
     }
   };
   if (loading || !data) {
@@ -318,6 +325,18 @@ useEffect(() => {
         )}
       </div>
 
+      {user?.role === "admin" && (
+        <button
+          onClick={() => {
+            setContribution(data.budget?.contributionPerPerson || "");
+            setShowBudgetModal(true);
+          }}
+          className="w-full mt-4 bg-white/10 border border-white/10 rounded-2xl py-3 px-4 font-semibold"
+        >
+          Set Monthly Contribution
+        </button>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4 mt-5">
         <div className="bg-white/5 rounded-2xl p-4">
@@ -344,6 +363,31 @@ useEffect(() => {
           </h3>
         </div>
       </div>
+
+      {data.charges?.length > 0 && (
+        <div className="mt-7">
+          <h2 className="text-lg font-semibold mb-3">Member Contributions</h2>
+          <div className="space-y-3">
+            {data.charges.map((charge) => (
+              <div
+                key={charge._id}
+                className="bg-white/5 rounded-2xl p-4 flex items-center justify-between gap-3"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium truncate">
+                    {charge.userId?.name || "Member"}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {charge.daysCharged} days ·{" "}
+                    {charge.reason.replaceAll("_", " ")}
+                  </p>
+                </div>
+                <p className="font-semibold shrink-0">₹{charge.amount}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Recent Activity */}
       <div className="mt-7">
@@ -509,6 +553,39 @@ useEffect(() => {
               </button>{" "}
             </div>{" "}
           </div>{" "}
+        </div>
+      )}
+
+      {showBudgetModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center px-4 z-50">
+          <div className="w-full max-w-sm bg-slate-900 rounded-3xl p-5">
+            <h2 className="text-xl font-bold mb-2">Monthly Contribution</h2>
+            <p className="text-sm text-slate-400 mb-4">
+              Mid-month joins and departures are prorated automatically.
+            </p>
+            <input
+              type="number"
+              min="1"
+              placeholder="Amount per member"
+              value={contribution}
+              onChange={(event) => setContribution(event.target.value)}
+              className="w-full mb-4 px-4 py-3 rounded-xl bg-white/10 outline-none"
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setShowBudgetModal(false)}
+                className="py-3 rounded-xl bg-white/10"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={setMonthlyContribution}
+                className="py-3 rounded-xl bg-indigo-500 font-semibold"
+              >
+                Save
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
