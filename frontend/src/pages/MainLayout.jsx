@@ -12,22 +12,20 @@ export default function MainLayout() {
   const navigate = useNavigate();
 
   let user = null;
-
-try {
-  user = JSON.parse(localStorage.getItem("user"));
-} catch {
-  localStorage.removeItem("user");
-}
+  try {
+    user = JSON.parse(localStorage.getItem("user"));
+  } catch {
+    localStorage.removeItem("user");
+  }
   const token = localStorage.getItem("token");
-
-
-const roomId = user?.roomId;
+  const roomId = user?.roomId;
 
   const [tab, setTab] = useState("home");
   const [requestCount, setRequestCount] = useState(0);
   const [alertCount, setAlertCount] = useState(0);
 
   const fetchRequestCount = async () => {
+    if (!roomId) return;
     try {
       if (user?.role !== "admin") return;
 
@@ -51,66 +49,77 @@ const roomId = user?.roomId;
   };
 
   const fetchAlertCount = async () => {
-  try {
-    const res = await api.get(
-      `/notifications/${roomId}`,
-      {
-        headers: {
-          Authorization: token
+    if (!roomId) return;
+    try {
+      const res = await api.get(
+        `/notifications/${roomId}`,
+        {
+          headers: {
+            Authorization: token
+          }
         }
-      }
-    );
+      );
 
-    const active =
-      res.data.notifications.filter(
-        (x) => x.status === "active"
-      ).length;
+      const active =
+        res.data.notifications.filter(
+          (x) => x.status === "active"
+        ).length;
 
-    setAlertCount(active);
+      setAlertCount(active);
 
-  } catch (error) {
-    console.log(error);
-  }
-};
-
-useEffect(() => {
-  fetchRequestCount();
-  fetchAlertCount();
-
-  const joinSocketRoom = () => {
-    socket.emit("join-room", { roomId, token });
+    } catch (error) {
+      console.log(error);
+    }
   };
 
-  joinSocketRoom();
+  useEffect(() => {
+    if (!token || !user) {
+      localStorage.clear();
+      navigate("/");
+      return;
+    }
+    if (!roomId) {
+      navigate("/join-room");
+      return;
+    }
 
-  const handleNewAlert = () => {
-    fetchAlertCount();
-  };
-
-  const handleAlertResolved = () => {
-    fetchAlertCount();
-  };
-
-  const handleJoinRequestChange = () => {
     fetchRequestCount();
-  };
+    fetchAlertCount();
 
-  socket.on("connect", joinSocketRoom);
-  socket.on("new-alert", handleNewAlert);
-  socket.on("alert-resolved", handleAlertResolved);
-  socket.on("join-request-created", handleJoinRequestChange);
-  socket.on("join-request-updated", handleJoinRequestChange);
-  socket.on("leave-request-updated", handleJoinRequestChange);
+    const joinSocketRoom = () => {
+      socket.emit("join-room", { roomId, token });
+    };
 
-  return () => {
-    socket.off("connect", joinSocketRoom);
-    socket.off("new-alert", handleNewAlert);
-    socket.off("alert-resolved", handleAlertResolved);
-    socket.off("join-request-created", handleJoinRequestChange);
-    socket.off("join-request-updated", handleJoinRequestChange);
-    socket.off("leave-request-updated", handleJoinRequestChange);
-  };
-}, []);
+    joinSocketRoom();
+
+    const handleNewAlert = () => {
+      fetchAlertCount();
+    };
+
+    const handleAlertResolved = () => {
+      fetchAlertCount();
+    };
+
+    const handleJoinRequestChange = () => {
+      fetchRequestCount();
+    };
+
+    socket.on("connect", joinSocketRoom);
+    socket.on("new-alert", handleNewAlert);
+    socket.on("alert-resolved", handleAlertResolved);
+    socket.on("join-request-created", handleJoinRequestChange);
+    socket.on("join-request-updated", handleJoinRequestChange);
+    socket.on("leave-request-updated", handleJoinRequestChange);
+
+    return () => {
+      socket.off("connect", joinSocketRoom);
+      socket.off("new-alert", handleNewAlert);
+      socket.off("alert-resolved", handleAlertResolved);
+      socket.off("join-request-created", handleJoinRequestChange);
+      socket.off("join-request-updated", handleJoinRequestChange);
+      socket.off("leave-request-updated", handleJoinRequestChange);
+    };
+  }, [roomId, token, navigate]);
 
   const logout = () => {
     localStorage.clear();
@@ -210,7 +219,6 @@ useEffect(() => {
               }`}
             >
               📨 Requests
-
               {requestCount > 0 && (
                 <span className="absolute -top-1 right-2 bg-red-500 text-white text-[10px] px-1.5 rounded-full">
                   {requestCount}
@@ -220,24 +228,23 @@ useEffect(() => {
           )}
 
           <button
-  onClick={() => {
-    setTab("alerts");
-    fetchAlertCount();
-  }}
-  className={`relative py-2 rounded-xl text-sm ${
-    tab === "alerts"
-      ? "bg-indigo-500 text-white"
-      : "text-slate-400"
-  }`}
->
-  🔔 Alerts
-
-  {alertCount > 0 && (
-    <span className="absolute -top-1 right-2 bg-red-500 text-white text-[10px] px-1.5 rounded-full">
-      {alertCount}
-    </span>
-  )}
-</button>
+            onClick={() => {
+              setTab("alerts");
+              fetchAlertCount();
+            }}
+            className={`relative py-2 rounded-xl text-sm ${
+              tab === "alerts"
+                ? "bg-indigo-500 text-white"
+                : "text-slate-400"
+            }`}
+          >
+            🔔 Alerts
+            {alertCount > 0 && (
+              <span className="absolute -top-1 right-2 bg-red-500 text-white text-[10px] px-1.5 rounded-full">
+                {alertCount}
+              </span>
+            )}
+          </button>
 
           <button
             onClick={() => setTab("more")}

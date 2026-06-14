@@ -7,7 +7,6 @@ import socket from "../services/socket";
 
 export default function Dashboard() {
   let user = null;
-
   try {
     user = JSON.parse(localStorage.getItem("user"));
   } catch {
@@ -17,6 +16,7 @@ export default function Dashboard() {
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [showTopUpModal, setShowTopUpModal] = useState(false);
@@ -31,11 +31,23 @@ export default function Dashboard() {
     category: "food",
   });
   const navigate = useNavigate();
-  const roomId = user?.roomId;
+
+  const getRoomIdFresh = () => {
+    try {
+      const freshUser = JSON.parse(localStorage.getItem("user"));
+      return freshUser?.roomId;
+    } catch {
+      return null;
+    }
+  };
+
+  const roomId = getRoomIdFresh();
 
   const copyRoomId = async () => {
     try {
-      await navigator.clipboard.writeText(roomId);
+      const activeRoomId = getRoomIdFresh();
+      if (!activeRoomId) return toast.error("No active Room ID found");
+      await navigator.clipboard.writeText(activeRoomId);
       toast.success("Room ID copied to clipboard");
     } catch (error) {
       toast.error("Copy failed");
@@ -43,8 +55,15 @@ export default function Dashboard() {
   };
 
   const fetchDashboard = async () => {
+    const activeRoomId = getRoomIdFresh();
+    if (!activeRoomId) {
+      setError("No active room found.");
+      setLoading(false);
+      return;
+    }
+
     try {
-      const res = await api.get(`/dashboard/${roomId}`, {
+      const res = await api.get(`/dashboard/${activeRoomId}`, {
         headers: {
           Authorization: token,
         },
@@ -54,33 +73,41 @@ export default function Dashboard() {
       });
 
       setData(res.data);
-      setPendingAmount(
-        user?.role === "admin"
-          ? 0
-          : res.data.pendingDuesByUser?.[user?._id] || 0,
-      );
-    } catch (error) {
-      console.log(error);
+      try {
+        const freshUser = JSON.parse(localStorage.getItem("user"));
+        setPendingAmount(
+          freshUser?.role === "admin"
+            ? 0
+            : res.data.pendingDuesByUser?.[freshUser?._id] || 0,
+        );
+      } catch (e) {
+        setPendingAmount(0);
+      }
+      setError(null);
+    } catch (err) {
+      console.log(err);
+      setError("Failed to load dashboard data. Please try reloading.");
     } finally {
       setLoading(false);
     }
   };
 
-useEffect(() => {
-  fetchDashboard();
-
-  const refreshDashboard = () => {
+  useEffect(() => {
     fetchDashboard();
-  };
 
-  socket.on("expenses-updated", refreshDashboard);
-  socket.on("settlements-updated", refreshDashboard);
+    const refreshDashboard = () => {
+      fetchDashboard();
+    };
 
-  return () => {
-    socket.off("expenses-updated", refreshDashboard);
-    socket.off("settlements-updated", refreshDashboard);
-  };
-}, []);
+    socket.on("expenses-updated", refreshDashboard);
+    socket.on("settlements-updated", refreshDashboard);
+
+    return () => {
+      socket.off("expenses-updated", refreshDashboard);
+      socket.off("settlements-updated", refreshDashboard);
+    };
+  }, []);
+
   const addExpense = async () => {
     if (!expenseForm.title.trim()) {
       return toast.error("Expense title required");
@@ -97,11 +124,17 @@ useEffect(() => {
     if (Number(expenseForm.amount) <= 0) {
       return toast.error("Amount must be greater than 0");
     }
+
+    const activeRoomId = getRoomIdFresh();
+    if (!activeRoomId) {
+      return toast.error("Room ID not found. Please log in again.");
+    }
+
     try {
       await api.post(
         "/expenses/add",
         {
-          roomId,
+          roomId: activeRoomId,
           title: expenseForm.title,
           amount: Number(expenseForm.amount),
           category: expenseForm.category,
@@ -137,11 +170,16 @@ useEffect(() => {
       return toast.error("Amount must be greater than 0");
     }
 
+    const activeRoomId = getRoomIdFresh();
+    if (!activeRoomId) {
+      return toast.error("Room ID not found. Please log in again.");
+    }
+
     try {
       await api.post(
         "/budget/topup",
         {
-          roomId,
+          roomId: activeRoomId,
           amountPerPerson: Number(topUpAmount),
         },
         {
@@ -168,10 +206,15 @@ useEffect(() => {
       return toast.error("Contribution must be greater than 0");
     }
 
+    const activeRoomId = getRoomIdFresh();
+    if (!activeRoomId) {
+      return toast.error("Room ID not found. Please log in again.");
+    }
+
     try {
       await api.post(
         "/budget/create",
-        { roomId, contribution: Number(contribution) },
+        { roomId: activeRoomId, contribution: Number(contribution) },
         { headers: { Authorization: token } },
       );
 
@@ -185,10 +228,25 @@ useEffect(() => {
       );
     }
   };
-  if (loading || !data) {
+
+  if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
         Loading...
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center gap-4">
+        <p className="text-red-400">{error || "Something went wrong"}</p>
+        <button
+          onClick={fetchDashboard}
+          className="px-4 py-2 bg-indigo-500 rounded-xl font-semibold hover:bg-indigo-600 transition"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -297,31 +355,31 @@ useEffect(() => {
         ) : (
           /* Member Pending Card */
           <button
-  onClick={() => navigate("/settlements")}
-  className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl px-4 py-4 text-left shadow-lg hover:opacity-95 transition"
->
-  <div className="flex items-start justify-between">
-    <div>
-      <p className="text-xs text-white/80">
-        Awaiting Admin Approval
-      </p>
+            onClick={() => navigate("/settlements")}
+            className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl px-4 py-4 text-left shadow-lg hover:opacity-95 transition"
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs text-white/80">
+                  Awaiting Admin Approval
+                </p>
 
-      <h3 className="text-2xl font-bold mt-1 text-white">
-        ₹{pendingAmount}
-      </h3>
+                <h3 className="text-2xl font-bold mt-1 text-white">
+                  ₹{pendingAmount}
+                </h3>
 
-      <p className="text-xs text-white/70 mt-1">
-        {pendingAmount > 0
-          ? "Tap to view settlements"
-          : "No pending dues"}
-      </p>
-    </div>
+                <p className="text-xs text-white/70 mt-1">
+                  {pendingAmount > 0
+                    ? "Tap to view settlements"
+                    : "No pending dues"}
+                </p>
+              </div>
 
-    <div className="text-2xl">
-      💵
-    </div>
-  </div>
-</button>
+              <div className="text-2xl">
+                💵
+              </div>
+            </div>
+          </button>
         )}
       </div>
 

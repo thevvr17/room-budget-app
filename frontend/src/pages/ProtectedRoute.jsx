@@ -5,6 +5,7 @@ export default function ProtectedRoute({ children }) {
   const user = localStorage.getItem("user");
 
   if (!token || !user) {
+    localStorage.clear();
     return <Navigate to="/" replace />;
   }
 

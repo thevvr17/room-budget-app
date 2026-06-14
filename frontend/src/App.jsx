@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-
+import { useEffect } from "react";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import MainLayout from "./pages/MainLayout";
@@ -11,6 +11,15 @@ import { Toaster } from "react-hot-toast";
 import ProtectedRoute from "./pages/ProtectedRoute";
 
 export default function App() {
+  useEffect(() => {
+    const APP_VERSION = "1.0.1";
+    const storedVersion = localStorage.getItem("app_version");
+    if (storedVersion !== APP_VERSION) {
+      localStorage.clear();
+      localStorage.setItem("app_version", APP_VERSION);
+    }
+  }, []);
+
   return (
     <BrowserRouter>
       <Routes>
