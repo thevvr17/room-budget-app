@@ -7,7 +7,12 @@ import toast from "react-hot-toast";
 export default function Settlements() {
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
-  const user = JSON.parse(localStorage.getItem("user"));
+  let user = null;
+  try {
+    user = JSON.parse(localStorage.getItem("user"));
+  } catch (e) {
+    user = null;
+  }
   const roomId = user?.roomId;
   const [settlements, setSettlements] = useState([]);
 

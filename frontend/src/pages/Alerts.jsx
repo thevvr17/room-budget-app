@@ -5,9 +5,13 @@ import socket from "../services/socket";
 
 export default function Alerts({ refreshBadge }) {
   const token = localStorage.getItem("token");
-const user = JSON.parse(localStorage.getItem("user"));
-const roomId = user?.roomId;
-
+  let user = null;
+  try {
+    user = JSON.parse(localStorage.getItem("user"));
+  } catch (e) {
+    user = null;
+  }
+  const roomId = user?.roomId;
   const isAdmin = user?.role === "admin";
 
   const [items, setItems] = useState([]);
@@ -24,27 +28,27 @@ const roomId = user?.roomId;
     }
   };
 
-useEffect(() => {
-  fetchAlerts();
-
-  socket.emit("join-room", { roomId, token });
-
-  const handleNewAlert = () => {
+  useEffect(() => {
     fetchAlerts();
-  };
 
-  const handleAlertResolved = () => {
-    fetchAlerts();
-  };
+    socket.emit("join-room", { roomId, token });
 
-  socket.on("new-alert", handleNewAlert);
-  socket.on("alert-resolved", handleAlertResolved);
+    const handleNewAlert = () => {
+      fetchAlerts();
+    };
 
-  return () => {
-    socket.off("new-alert", handleNewAlert);
-    socket.off("alert-resolved", handleAlertResolved);
-  };
-}, []);
+    const handleAlertResolved = () => {
+      fetchAlerts();
+    };
+
+    socket.on("new-alert", handleNewAlert);
+    socket.on("alert-resolved", handleAlertResolved);
+
+    return () => {
+      socket.off("new-alert", handleNewAlert);
+      socket.off("alert-resolved", handleAlertResolved);
+    };
+  }, []);
 
   const resolveAlert = async (id) => {
     try {
@@ -56,12 +60,30 @@ useEffect(() => {
         }
       );
 
-toast.success("Resolved");
-fetchAlerts();
-refreshBadge?.();
+      toast.success("Resolved");
+      fetchAlerts();
+      refreshBadge?.();
     } catch (error) {
       toast.error(error?.response?.data?.message || "Failed");
     }
+  };
+
+  const isLeaveAlert = (item) => {
+    if (
+      item.type === "leave_request" ||
+      item.type === "leave_cancelled" ||
+      item.type === "leave_approved"
+    ) {
+      return true;
+    }
+    const message = item.message?.toLowerCase() || "";
+    return (
+      message.startsWith("your leave request") ||
+      message.startsWith("leave request") ||
+      message.startsWith("leave approved request") ||
+      message.includes("sent a leave request") ||
+      message.includes("sent leave request")
+    );
   };
 
   return (
@@ -92,7 +114,7 @@ refreshBadge?.();
 
             {item.status === "active" ? (
               <>
-                {isAdmin ? (
+                {isAdmin && !isLeaveAlert(item) ? (
                   <button
                     onClick={() => resolveAlert(item._id)}
                     className="mt-3 bg-indigo-500 px-4 py-2 rounded-xl text-sm"
@@ -100,9 +122,11 @@ refreshBadge?.();
                     Mark Resolved
                   </button>
                 ) : (
-                  <p className="text-yellow-400 text-sm mt-3">
-                    Waiting for admin approval
-                  </p>
+                  !isLeaveAlert(item) && (
+                    <p className="text-yellow-400 text-sm mt-3">
+                      Waiting for admin approval
+                    </p>
+                  )
                 )}
               </>
             ) : (

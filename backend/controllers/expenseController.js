@@ -95,8 +95,15 @@ exports.updateExpense = async (req, res) => {
     const isAdmin = room.admin.toString() === req.user.id;
     const isOwner = expense.paidBy.toString() === req.user.id;
 
-    if (!isAdmin && !isOwner) {
+    if (!isOwner) {
       return res.status(403).json({ message: "Not allowed" });
+    }
+
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    if (expense.month !== currentMonth) {
+      return res.status(403).json({
+        message: "Cannot edit/delete expense from a previous month"
+      });
     }
 
     const nextAmount = Number(amount ?? expense.amount);
@@ -163,8 +170,15 @@ exports.deleteExpense = async (req, res) => {
     const isAdmin = room.admin.toString() === req.user.id;
     const isOwner = expense.paidBy.toString() === req.user.id;
 
-    if (!isAdmin && !isOwner) {
+    if (!isOwner) {
       return res.status(403).json({ message: "Not allowed" });
+    }
+
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    if (expense.month !== currentMonth) {
+      return res.status(403).json({
+        message: "Cannot edit/delete expense from a previous month"
+      });
     }
 
     const isMemberExpense = room.admin.toString() !== expense.paidBy.toString();

@@ -2,6 +2,7 @@ const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const Room = require("../models/Room");
 const JoinRequest = require("../models/JoinRequest");
+const jwt = require("jsonwebtoken");
 
 exports.getStatus = async (req, res) => {
   try {
@@ -49,50 +50,76 @@ exports.getStatus = async (req, res) => {
 
 exports.register = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, isAdminRequested, adminCode } = req.body;
 
-    const existingUser = await User.findOne({ email });
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
       return res.status(400).json({ message: "User already exists" });
+    }
+
+    let assignedRole = "member";
+    if (isAdminRequested) {
+      const codeToMatch = process.env.ADMIN_SECRET_CODE || "FIRSTPROJECT";
+      if (adminCode === codeToMatch) {
+        const existingAdmin = await User.findOne({ role: "admin" });
+        if (!existingAdmin) {
+          assignedRole = "admin";
+        }
+      }
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = new User({
       name,
-      email,
+      email: normalizedEmail,
       password: hashedPassword,
-      role: "member"
+      role: assignedRole
     });
 
     await user.save();
 
-const userData = {
-  _id: user._id,
-  name: user.name,
-  email: user.email,
-  role: user.role
-};
+    const userData = {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role
+    };
 
-res.status(201).json({
-  message: "User registered successfully",
-  user: userData
-});
+    let responseMessage = "User registered successfully";
+    if (isAdminRequested) {
+      if (user.role === "admin") {
+        responseMessage = "User registered successfully as Admin";
+      } else {
+        responseMessage = "User registered successfully as Member (admin code invalid or admin already exists)";
+      }
+    }
+
+    res.status(201).json({
+      message: responseMessage,
+      user: userData
+    });
 
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
-
-
-const jwt = require("jsonwebtoken");
-
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email });
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const user = await User.findOne({ email: normalizedEmail });
 
     if (!user) {
       return res.status(400).json({

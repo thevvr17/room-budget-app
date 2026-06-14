@@ -253,6 +253,16 @@ exports.scheduleMemberLeave = async (req, res) => {
           resolvedAt: new Date()
         }
       );
+
+      await Notification.create({
+        roomId,
+        type: "leave_approved",
+        message: "Leave approved request",
+        createdBy: req.user.id,
+        toUser: userId,
+        relatedId: leaveRequest._id,
+        status: "resolved"
+      });
     }
 
     await ensureMonthlyBudget(room);
@@ -261,6 +271,7 @@ exports.scheduleMemberLeave = async (req, res) => {
     io.to(roomId.toString()).emit("members-updated");
     io.to(roomId.toString()).emit("leave-request-updated");
     io.to(roomId.toString()).emit("alert-resolved");
+    io.to(roomId.toString()).emit("new-alert");
     res.json({ message: "Leaving date scheduled", membership });
   } catch (error) {
     res.status(500).json({ error: error.message });

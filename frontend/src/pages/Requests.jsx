@@ -5,15 +5,17 @@ import socket from "../services/socket";
 
 export default function Requests({ refreshBadge }) {
   const token = localStorage.getItem("token");
-  const user = JSON.parse(localStorage.getItem("user"));
-
-
-const roomId = user?.roomId;
+  let user = null;
+  try {
+    user = JSON.parse(localStorage.getItem("user"));
+  } catch (e) {
+    user = null;
+  }
+  const roomId = user?.roomId;
 
   const [requests, setRequests] = useState([]);
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [scheduleDates, setScheduleDates] = useState({});
-
   const fetchRequests = async () => {
     try {
       const res = await api.get(

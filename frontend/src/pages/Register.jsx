@@ -10,47 +10,58 @@ export default function Register() {
   const [form, setForm] = useState({
     name: "",
     email: "",
-    password: ""
+    password: "",
+    isAdminRequested: false,
+    adminCode: ""
   });
 
   const registerUser = async (e) => {
     e.preventDefault();
 
-      if (!form.name.trim()) {
-    return toast.error("Name is required");
-  }
+    if (!form.name.trim()) {
+      return toast.error("Name is required");
+    }
 
-  if (form.name.trim().length < 2) {
-    return toast.error  ("Name must be at least 2 characters");
-  }
+    if (form.name.trim().length < 2) {
+      return toast.error("Name must be at least 2 characters");
+    }
 
-  if (!form.email.trim()) {
-    return toast.error("Email is required");
-  }
+    if (!form.email.trim()) {
+      return toast.error("Email is required");
+    }
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  if (!emailRegex.test(form.email)) {
-    return toast.error("Enter valid email");
-  }
+    if (!emailRegex.test(form.email)) {
+      return toast.error("Enter valid email");
+    }
 
-  if (!form.password) {
-    return toast.error("Password is required");
-  }
+    if (!form.password) {
+      return toast.error("Password is required");
+    }
 
-  if (form.password.length < 6) {
-    return toast.error("Password must be at least 6 characters");
-  }
+    if (form.password.length < 6) {
+      return toast.error("Password must be at least 6 characters");
+    }
+
+    if (form.isAdminRequested && !form.adminCode.trim()) {
+      return toast.error("Admin registration code is required");
+    }
 
     try {
       const res = await api.post("/users/register", {
         name: form.name,
-        email: form.email,
+        email: form.email.toLowerCase().trim(),
         password: form.password,
-        role: "member"
+        isAdminRequested: form.isAdminRequested,
+        adminCode: form.adminCode
       });
 
-      toast.success("Registered Successfully");
+      if (res.data.user?.role === "admin") {
+        toast.success("Registered successfully as Admin!");
+      } else {
+        toast.success("Registered successfully as Member!");
+      }
 
       navigate("/");
 
@@ -120,10 +131,44 @@ export default function Register() {
             className="w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-slate-300 outline-none"
           />
 
+          <div className="flex items-center gap-2 text-slate-300 px-1 py-1">
+            <input
+              type="checkbox"
+              id="isAdminRequested"
+              checked={form.isAdminRequested}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  isAdminRequested: e.target.checked
+                })
+              }
+              className="w-4 h-4 accent-purple-500 rounded cursor-pointer"
+            />
+            <label htmlFor="isAdminRequested" className="text-sm cursor-pointer select-none">
+              Register as Admin
+            </label>
+          </div>
+
+          {form.isAdminRequested && (
+            <input
+              type="password"
+              placeholder="Admin Registration Code"
+              value={form.adminCode}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  adminCode: e.target.value
+                })
+              }
+              className="w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-slate-300 outline-none"
+            />
+          )}
+
           <button
             type="submit"
             className="w-full py-3 rounded-xl bg-purple-500 hover:bg-purple-600 text-white font-semibold"
-          disabled={!form.name || !form.email || !form.password}>
+            disabled={!form.name || !form.email || !form.password}
+          >
             Register
           </button>
 

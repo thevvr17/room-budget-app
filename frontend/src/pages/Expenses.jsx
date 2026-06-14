@@ -8,12 +8,16 @@ export default function Expenses() {
   const navigate = useNavigate();
 
   const token = localStorage.getItem("token");
-const user = JSON.parse(localStorage.getItem("user"));
-const roomId = user?.roomId;
+  let user = null;
+  try {
+    user = JSON.parse(localStorage.getItem("user"));
+  } catch (e) {
+    user = null;
+  }
+  const roomId = user?.roomId;
 
   const [expenses, setExpenses] = useState([]);
   const [search, setSearch] = useState("");
-
   const [editId, setEditId] = useState(null);
 
   const [form, setForm] = useState({
@@ -196,7 +200,9 @@ const roomId = user?.roomId;
 
             </div>
 
-            {(!item.settlement || item.settlement.status === "pending") && (
+            {item.paidBy === user?._id &&
+              item.month === new Date().toISOString().slice(0, 7) &&
+              (user?.role === "admin" || !item.settlement || item.settlement.status === "pending") && (
               <div className="grid grid-cols-2 gap-3 mt-4">
                 <button
                   onClick={() => openEdit(item)}
