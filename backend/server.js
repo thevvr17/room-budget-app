@@ -75,6 +75,15 @@ app.get("/health", (req, res) => {
   });
 });
 
+app.get("/healthz", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    dbState: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString()
+  });
+});
+
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     status: "ok",
