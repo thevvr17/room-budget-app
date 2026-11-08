@@ -1,6 +1,7 @@
 const Budget = require("../models/Budget");
 const Room = require("../models/Room");
 const { ensureMonthlyBudget } = require("../services/budgetService");
+const { isRoomAdmin } = require("../middleware/roomAuthMiddleware");
 
 // CREATE MONTHLY BUDGET
 exports.createBudget = async (req, res) => {
@@ -14,7 +15,7 @@ exports.createBudget = async (req, res) => {
     }
 
     // only admin can set budget
-    if (room.admin.toString() !== req.user.id) {
+    if (!isRoomAdmin(room, req.user.id)) {
       return res.status(403).json({ message: "Only admin can set budget" });
     }
 
@@ -54,7 +55,7 @@ exports.addTopUp = async (req, res) => {
     }
 
     // only admin
-    if (room.admin.toString() !== req.user.id) {
+    if (!isRoomAdmin(room, req.user.id)) {
       return res.status(403).json({ message: "Only admin can add top-up" });
     }
 

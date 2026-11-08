@@ -141,7 +141,12 @@ export default function Members() {
     );
   }
 
-  const isAdmin = room.admin?._id === user?._id;
+  const isMemberAdmin = (member) =>
+    member._id === room.admin?._id ||
+    (Array.isArray(room.admins) && room.admins.some((a) => (a?._id || a) === member._id)) ||
+    member.role === "admin";
+
+  const isAdmin = isMemberAdmin({ _id: user?._id, role: user?.role });
 
   return (
     <div className="min-h-screen bg-slate-950 text-white px-4 py-5 pb-10">
@@ -168,21 +173,21 @@ export default function Members() {
               </div>
               <span
                 className={`text-xs px-2 py-1 rounded-full shrink-0 ${
-                  member._id === room.admin._id
+                  isMemberAdmin(member)
                     ? "bg-yellow-400/20 text-yellow-300"
                     : member.membership?.status === "scheduled_leave"
                       ? "bg-amber-400/20 text-amber-300"
                       : "bg-emerald-400/20 text-emerald-300"
                 }`}
               >
-                {member._id === room.admin._id
+                {isMemberAdmin(member)
                   ? "Admin"
                   : member.membership?.status === "scheduled_leave"
                     ? "Leaving"
                     : "Active"}
               </span>
             </div>
-            {member._id !== room.admin._id && (
+            {!isMemberAdmin(member) && (
               <div className="grid grid-cols-2 gap-3 mt-3 text-xs text-slate-400">
                 <p>Joined: {formatDate(member.membership?.joinedAt)}</p>
                 <p>Final day: {formatDate(member.membership?.leavingAt)}</p>
@@ -197,7 +202,7 @@ export default function Members() {
           <h2 className="text-lg font-semibold mb-3">Member Departures</h2>
           <div className="space-y-3">
             {room.members
-              ?.filter((member) => member._id !== room.admin._id)
+              ?.filter((member) => !isMemberAdmin(member))
               .map((member) => (
                 <div key={member._id} className="bg-white/5 rounded-2xl p-4">
                   <div className="flex justify-between gap-3 mb-3">

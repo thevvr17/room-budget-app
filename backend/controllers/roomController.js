@@ -1,10 +1,11 @@
 const Room = require("../models/Room");
 const User = require("../models/User");
-const mongoose = require("mongoose"); // ✅ MOVE HERE
+const mongoose = require("mongoose");
 const JoinRequest = require("../models/JoinRequest");
 const Membership = require("../models/Membership");
 const LeaveRequest = require("../models/LeaveRequest");
 const Notification = require("../models/Notification");
+const { isRoomAdmin } = require("../middleware/roomAuthMiddleware");
 
 // CREATE ROOM
 exports.createRoom = async (req, res) => {
@@ -14,14 +15,19 @@ exports.createRoom = async (req, res) => {
         const room = new Room({
             name,
             admin: req.user.id,
+            admins: [req.user.id],
             members: [req.user.id]
         });
 
         await room.save();
+
+        // Start initial room creation from 1st of the month so full month is charged
+        const startOfMonth = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
+
         await Membership.create({
             roomId: room._id,
             userId: req.user.id,
-            joinedAt: room.createdAt,
+            joinedAt: startOfMonth,
             status: "active"
         });
         await User.findByIdAndUpdate(req.user.id, { role: "admin" });
@@ -35,7 +41,8 @@ exports.createRoom = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
-//join reuest 
+
+// JOIN REQUEST
 exports.joinRequest = async (req, res) => {
   try {
     const { roomId } = req.body;
@@ -72,12 +79,12 @@ exports.joinRequest = async (req, res) => {
     });
   }
 };
-// ADD MEMBER
+
+// ADD MEMBER (ADMIN ONLY)
 exports.addMember = async (req, res) => {
     try {
         const { roomId, email } = req.body;
 
-        // ✅ validation works now
         if (!mongoose.Types.ObjectId.isValid(roomId)) {
             return res.status(400).json({ message: "Invalid Room ID" });
         }
@@ -91,7 +98,7 @@ exports.addMember = async (req, res) => {
         }
 
         // check admin
-        if (room.admin.toString() !== req.user.id) {
+        if (!isRoomAdmin(room, req.user.id)) {
             return res.status(403).json({ message: "Only admin can add members" });
         }
 
@@ -131,7 +138,8 @@ exports.getRoom = async (req, res) => {
 
     const room = await Room.findById(roomId)
       .populate("admin", "name email")
-      .populate("members", "name email");
+      .populate("admins", "name email")
+      .populate("members", "name email role");
 
     if (!room) {
       return res.status(404).json({ message: "Room not found" });
@@ -171,9 +179,9 @@ exports.leaveRoom = async (req, res) => {
       return res.status(403).json({ message: "Room access denied" });
     }
 
-    if (room.admin.toString() === req.user.id) {
+    if (isRoomAdmin(room, req.user.id)) {
       return res.status(400).json({
-        message: "The room admin cannot submit a leave request"
+        message: "A room admin cannot submit a leave request"
       });
     }
 

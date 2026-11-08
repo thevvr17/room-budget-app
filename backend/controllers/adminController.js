@@ -8,8 +8,13 @@ const LeaveRequest = require("../models/LeaveRequest");
 const Notification = require("../models/Notification");
 const { ensureMonthlyBudget } = require("../services/budgetService");
 
-const isAdminForRoom = (room, userId) =>
-  room && room.admin.toString() === userId;
+const isAdminForRoom = (room, userId) => {
+  if (!room || !userId) return false;
+  const userStr = userId.toString();
+  const primaryAdmin = room.admin ? room.admin.toString() : null;
+  const inAdminsList = Array.isArray(room.admins) && room.admins.some((a) => (a?._id || a).toString() === userStr);
+  return primaryAdmin === userStr || inAdminsList;
+};
 
 exports.resetMonth = async (req, res) => {
   try {
@@ -197,8 +202,8 @@ exports.scheduleMemberLeave = async (req, res) => {
       return res.status(403).json({ message: "Admin only" });
     }
 
-    if (room.admin.toString() === userId) {
-      return res.status(400).json({ message: "The room admin cannot be removed" });
+    if (isAdminForRoom(room, userId)) {
+      return res.status(400).json({ message: "A room admin cannot be scheduled for leave" });
     }
 
     const leaveDate = new Date(`${leavingAt}T00:00:00.000Z`);
@@ -287,8 +292,8 @@ exports.removeMember = async (req, res) => {
       return res.status(403).json({ message: "Admin only" });
     }
 
-    if (room.admin.toString() === userId) {
-      return res.status(400).json({ message: "The room admin cannot be removed" });
+    if (isAdminForRoom(room, userId)) {
+      return res.status(400).json({ message: "A room admin cannot be scheduled for leave" });
     }
 
     const membership = await Membership.findOne({

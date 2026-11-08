@@ -22,9 +22,22 @@ const loadRoom = async (req, res) => {
   return room;
 };
 
-const isRoomMember = (room, userId) =>
-  room.admin.toString() === userId ||
-  room.members.some((member) => member.toString() === userId);
+const isRoomAdmin = (room, userId) => {
+  if (!room || !userId) return false;
+  const userStr = userId.toString();
+  const primaryAdmin = room.admin ? room.admin.toString() : null;
+  const inAdminsList = Array.isArray(room.admins) && room.admins.some((a) => (a?._id || a).toString() === userStr);
+  return primaryAdmin === userStr || inAdminsList;
+};
+
+const isRoomMember = (room, userId) => {
+  if (!room || !userId) return false;
+  const userStr = userId.toString();
+  return (
+    isRoomAdmin(room, userStr) ||
+    (Array.isArray(room.members) && room.members.some((m) => (m?._id || m).toString() === userStr))
+  );
+};
 
 exports.requireRoomMember = async (req, res, next) => {
   try {
@@ -46,7 +59,7 @@ exports.requireRoomAdmin = async (req, res, next) => {
     const room = await loadRoom(req, res);
     if (!room) return;
 
-    if (room.admin.toString() !== req.user.id) {
+    if (!isRoomAdmin(room, req.user.id)) {
       return res.status(403).json({ message: "Admin only" });
     }
 
@@ -56,4 +69,5 @@ exports.requireRoomAdmin = async (req, res, next) => {
   }
 };
 
+exports.isRoomAdmin = isRoomAdmin;
 exports.isRoomMember = isRoomMember;

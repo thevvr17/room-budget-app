@@ -66,10 +66,7 @@ exports.register = async (req, res) => {
     if (isAdminRequested) {
       const codeToMatch = process.env.ADMIN_SECRET_CODE || "FIRSTPROJECT";
       if (adminCode === codeToMatch) {
-        const existingAdmin = await User.findOne({ role: "admin" });
-        if (!existingAdmin) {
-          assignedRole = "admin";
-        }
+        assignedRole = "admin";
       }
     }
 
@@ -96,7 +93,7 @@ exports.register = async (req, res) => {
       if (user.role === "admin") {
         responseMessage = "User registered successfully as Admin";
       } else {
-        responseMessage = "User registered successfully as Member (admin code invalid or admin already exists)";
+        responseMessage = "User registered successfully as Member (admin code invalid)";
       }
     }
 
