@@ -59,7 +59,7 @@ async function seedData() {
     const hashedPassword2 = await bcrypt.hash("Gorgin@123", 10);
     const admin2 = await User.create({
       name: "Gorigin Naidu",
-      email: "garogapatipradeep2000@gmail.com",
+      email: "garigapatipradeep2000@gmail.com",
       password: hashedPassword2,
       role: "admin"
     });
@@ -99,7 +99,7 @@ async function seedData() {
     console.log("Room ID:  ", room._id.toString());
     console.log("\nAdmins configured:");
     console.log("1) Vishnu        - thevvr17@gmail.com");
-    console.log("2) Gorigin Naidu - garogapatipradeep2000@gmail.com");
+    console.log("2) Gorigin Naidu - garigapatipradeep2000@gmail.com");
     console.log("\nBilling start date: November 1st (Full 30-day billing)");
     console.log("========================================\n");
 
